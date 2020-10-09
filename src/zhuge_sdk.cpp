@@ -56,7 +56,7 @@ namespace zhugeio
 
 	ZhugeUser::~ZhugeUser()
 	{
-		
+
 	}
 
 	ZhugeEvent::ZhugeEvent(const std::string& event_name) : ZhugeSDKUploadData(ZG_EVT)
@@ -99,13 +99,13 @@ namespace zhugeio
 
 	}
 
-	SDKDataStorage::SDKDataStorage(ZhugeSDK* sdk): 
+	SDKDataStorage::SDKDataStorage(ZhugeSDK* sdk) :
 		sdk(sdk)
 	{
 
 	}
 
-	MemorySDKDataStorage::MemorySDKDataStorage(ZhugeSDK* sdk) : 
+	MemorySDKDataStorage::MemorySDKDataStorage(ZhugeSDK* sdk) :
 		SDKDataStorage(sdk)
 	{
 
@@ -138,10 +138,10 @@ namespace zhugeio
 
 	void MemorySDKDataStorage::Sync()
 	{
-		
+
 	}
 
-	ZhugeSDKTaskProcess::ZhugeSDKTaskProcess(ZhugeSDK* sdk) : 
+	ZhugeSDKTaskProcess::ZhugeSDKTaskProcess(ZhugeSDK* sdk) :
 		zhuge_sdk(sdk),
 		upload_data_queue()
 	{
@@ -195,8 +195,8 @@ namespace zhugeio
 
 			// 执行上传
 			httplib::Headers headers = {
-				{"User-Agent", "ZHUGE-CPP-SDK"},
-				{"Content-Type", "x-www-form-urlencode;charset=utf-8"}
+				{ "User-Agent", "ZHUGE-CPP-SDK" },
+				{ "Content-Type", "x-www-form-urlencode;charset=utf-8" }
 			};
 
 			for (auto itr = all_data.begin(); itr != all_data.end();) {
@@ -225,8 +225,9 @@ namespace zhugeio
 			}
 
 			this->data_storage->Sync();  // 同步对数据存储的修改
-			
-		} catch (std::exception& e) {
+
+		}
+		catch (std::exception& e) {
 			if (this->zhuge_sdk->sdk_config->enable_log) {
 				std::clog << "[ZhugeSDK] Exception happened when upload data: " << e.what() << std::endl;
 			}
@@ -254,7 +255,10 @@ namespace zhugeio
 					std::string json_str = json_writer.write(root);
 					this->data_storage->Save(json_str);
 				}
-				delete element;  // 释放上传数据的内存
+
+				if (element->GetDataType() != ZG_PL) {
+					delete element;  // 释放上传数据的内存
+				}
 			}
 
 			if (!data.empty()) {
@@ -341,6 +345,7 @@ namespace zhugeio
 	{
 		this->user_id = "";
 		this->stopped.store(false);
+		this->platform_info = nullptr;
 		this->session_id.store(0);
 	}
 
@@ -352,7 +357,7 @@ namespace zhugeio
 		{
 			throw ZhugeSDKException("获取Windows硬件ID信息失败！");
 		}
-		char* uuid = HwProfInfo.szHwProfileGuid;
+		WCHAR* uuid = HwProfInfo.szHwProfileGuid;
 		std::string uuid_str;
 		uuid++;
 		while (*(uuid) != '}') {
@@ -363,7 +368,7 @@ namespace zhugeio
 #elif __APPLE__  // MacOS
 		io_registry_entry_t ioRegistryRoot = IORegistryEntryFromPath(
 			kIOMasterPortDefault, "IOService:/");
-		CFStringRef uuidCf = (CFStringRef) IORegistryEntryCreateCFProperty(
+		CFStringRef uuidCf = (CFStringRef)IORegistryEntryCreateCFProperty(
 			ioRegistryRoot, CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault, 0);
 		IOObjectRelease(ioRegistryRoot);
 		char buf[512];
@@ -422,9 +427,9 @@ namespace zhugeio
 		}
 
 		if (this->sdk_config->enable_log) {
-			std::clog 
-				<< "[ZhugeSDK] Common sys event properties setted: " 
-				<< this->common_custom_properties.toStyledString() 
+			std::clog
+				<< "[ZhugeSDK] Common sys event properties setted: "
+				<< this->common_custom_properties.toStyledString()
 				<< std::endl;
 		}
 	}
@@ -440,9 +445,9 @@ namespace zhugeio
 			this->common_custom_properties[member] = common_custom_properties[member];
 		}
 		if (this->sdk_config->enable_log) {
-			std::clog 
-				<< "[ZhugeSDK] Common cus event properties setted: " 
-				<< this->common_custom_properties.toStyledString() 
+			std::clog
+				<< "[ZhugeSDK] Common cus event properties setted: "
+				<< this->common_custom_properties.toStyledString()
 				<< std::endl;
 		}
 	}
@@ -476,12 +481,12 @@ namespace zhugeio
 		LCID locale_id = GetUserDefaultLCID();
 		unsigned short lang = locale_id & 0xFF;
 		switch (lang) {
-			case LANG_CHINESE:
-				return "zh";
-			case LANG_ENGLISH:
-				return "en";
-			default:
-				return "unknown";
+		case LANG_CHINESE:
+			return "zh";
+		case LANG_ENGLISH:
+			return "en";
+		default:
+			return "unknown";
 		}
 #else
 		return "zh";
@@ -492,11 +497,38 @@ namespace zhugeio
 	std::string GetOSName()
 	{
 #ifdef _WIN32
-		return "WIN";
+		return "Windows";
 #elif __linux__
-		return "LINUX";
+		return "Linux";
 #elif __MAC__
-		return "MAC";
+		return "MacOS";
+#else
+		return "";
+#endif
+	}
+
+	// 获取当前操作系统版本
+	std::string GetOSVersion()
+	{
+#ifdef _WIN32
+		typedef LONG NTSTATUS, *PNTSTATUS;
+		typedef NTSTATUS(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+		HMODULE hMod = ::GetModuleHandleW(L"ntdll.dll");
+		if (hMod) {
+			RtlGetVersionPtr fxPtr = (RtlGetVersionPtr)::GetProcAddress(hMod, "RtlGetVersion");
+			if (fxPtr != nullptr) {
+				RTL_OSVERSIONINFOW rovi = { 0 };
+				rovi.dwOSVersionInfoSize = sizeof(rovi);
+				if (0x00000000 == fxPtr(&rovi)) {
+					return std::to_string(rovi.dwMajorVersion);
+				}
+			}
+		}
+		return "";
+#elif __linux__
+		return "";
+#elif __MAC__
+		return "";
 #else
 		return "";
 #endif
@@ -539,6 +571,11 @@ namespace zhugeio
 			platform_ptr->AddSystemProperty("os", GetOSName());   // OS
 		}
 
+		const std::string os_version = GetOSVersion();
+		if (!os_version.empty()) {
+			platform_ptr->AddSystemProperty("ov", os_version);
+		}
+
 		return platform_ptr;
 	}
 
@@ -560,7 +597,9 @@ namespace zhugeio
 				system_clock::now().time_since_epoch()).count();
 			platform_ptr->AddSystemProperty("ct", ts);  // 加入当前时间戳
 		}
-
+		ZhugePlatform *old_platform = this->platform_info;
+		this->platform_info = platform_ptr;
+		delete old_platform;
 		this->upload_process->AddUploadDataToQueue(platform_ptr);
 	}
 
@@ -581,6 +620,15 @@ namespace zhugeio
 		}
 		session_start->AddSystemProperty("tz", this->sdk_config->time_zone);  // 设置时区
 		session_start->AddSystemProperty("ct", session_id.load());  // 事件时间与会话ID一致
+
+		// 操作系统信息
+		if (!session_start->HasSystemProperty("os") && this->platform_info != nullptr) {
+			session_start->AddSystemProperty("os", platform_info->GetSystemStringProperty("os", "unknown"));
+		}
+		if (!session_start->HasSystemProperty("ov") && this->platform_info != nullptr) {
+			session_start->AddSystemProperty("ov", platform_info->GetSystemStringProperty("ov", "unknown"));
+		}
+
 		this->upload_process->AddUploadDataToQueue(session_start);
 	}
 
@@ -644,6 +692,14 @@ namespace zhugeio
 			event_ptr->AddSystemProperty("ct", ts);  //添加事件时间
 		}
 
+		// 获取操作系统信息
+		if (!event_ptr->HasSystemProperty("os") && this->platform_info != nullptr) {
+			event_ptr->AddSystemProperty("os", platform_info->GetSystemStringProperty("os", "unknown"));
+		}
+		if (!event_ptr->HasSystemProperty("ov") && this->platform_info != nullptr) {
+			event_ptr->AddSystemProperty("ov", platform_info->GetSystemStringProperty("ov", "unknown"));
+		}
+
 		this->FillCommonEventProperties(event_ptr);  // 填充公共事件属性
 
 		this->upload_process->AddUploadDataToQueue(event_ptr);
@@ -655,7 +711,7 @@ namespace zhugeio
 		const long long ts = duration_cast<milliseconds>(
 			system_clock::now().time_since_epoch()).count();
 		event_ptr->AddSystemPropertyIfAbsent("ct", ts);
-		return {event_ptr, ts};
+		return{ event_ptr, ts };
 	}
 
 	void ZhugeSDK::EndTrack(TrackTimeHolder& track_time_holder)
@@ -701,17 +757,17 @@ namespace zhugeio
 		api_host(api_host),
 		api_port(api_port),
 		api_path(DEFAULT_API_PATH),
-		app_key(app_key), 
+		app_key(app_key),
 		platform(ZHUGE_PLATFORM_JS),
 		process_interval_milliseconds(DEFAULT_PROCESS_INTERVAL_MILLISECONDS),
 		max_send_size(DEFAULT_MAX_SEND_SIZE),
-		enable_log(DEFAULT_ENABLE_LOG), 
+		enable_log(DEFAULT_ENABLE_LOG),
 		enable_debug(DEFAULT_ENABLE_DEBUG),
-		user_device_id(""), 
+		user_device_id(""),
 		time_zone(DEFAULT_TIME_ZONE),
 		api_connection_timeout(DEFAULT_API_CONNECTION_TIMEOUT_S),
 		api_read_timeout(DEFAULT_API_READ_TIMEOUT_S),
-		api_write_timeout(DEFAULT_API_WRITE_TIMEOUT_S), 
+		api_write_timeout(DEFAULT_API_WRITE_TIMEOUT_S),
 		max_storage_records(DEFAULT_MAX_STORAGE_RECORDS),
 		storage_file_path(""){};
 

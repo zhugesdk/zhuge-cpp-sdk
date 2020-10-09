@@ -97,10 +97,10 @@ namespace zhugeio
 		std::string storage_file_path;
 
 		ZhugeSDKConfig(
-			const std::string api_host, 
+			const std::string api_host,
 			const int api_port,
 			const std::string app_key
-		);
+			);
 
 		ZhugeSDKConfig& APIPath(std::string api_path);
 
@@ -145,7 +145,7 @@ namespace zhugeio
 		virtual const char* what() const _NOEXCEPT
 		{
 			std::clog << "诸葛SDK调用异常：'" << this->msg << "'" << std::endl;
-			return msg.c_str();
+			return this->msg.c_str();
 		}
 	};
 
@@ -159,9 +159,10 @@ namespace zhugeio
 		// 默认构造函数
 		ZhugeSDKUploadData(const char* const data_type);
 
+		// 获取上传数据类型
 		inline const char* GetDataType()
 		{
-			return this->data_type;
+			return data_type;
 		}
 
 		// 判断某个系统属性是否存在
@@ -169,6 +170,30 @@ namespace zhugeio
 
 		// 判断某个自定义属性是否存在
 		bool HasCustomProperty(const std::string& property_name);
+
+		// 获取某个系统属性的值，如果不存在，则返回默认值
+		std::string GetSystemStringProperty(
+			const std::string& property_name, std::string default_value)
+		{
+			if (this->HasSystemProperty(property_name)) {
+				return (*(this->data))["pr"]['$' + property_name].asString();
+			}
+			else {
+				return default_value;
+			}
+		}
+
+		// 获取某个自定义属性的值，如果没有，则返回默认值
+		std::string GetCustomProperty(
+			const std::string& property_name, std::string default_value)
+		{
+			if (this->HasCustomProperty(property_name)) {
+				return (*(this->data))["pr"]['_' + property_name].asString();
+			}
+			else {
+				return default_value;
+			}
+		}
 
 		// 添加系统属性，以$开头
 		template <typename PROP_TYPE>
@@ -188,7 +213,7 @@ namespace zhugeio
 		template <typename PROP_TYPE>
 		void AddSystemPropertyIfAbsent(const std::string& property_name, PROP_TYPE value)
 		{
-			const std::string new_member ='$' + property_name;
+			const std::string new_member = '$' + property_name;
 			if (!(*(this->data))["pr"].isMember(new_member)) {
 				(*(this->data))["pr"][new_member] = value;
 			}
@@ -309,7 +334,7 @@ namespace zhugeio
 
 		}
 	};
-	
+
 	class ZhugeSDK;
 
 	// SDK上传数据存储
@@ -391,6 +416,9 @@ namespace zhugeio
 
 		// 通用自定义属性
 		Json::Value common_custom_properties;
+
+		// 平台相关信息
+		ZhugePlatform* platform_info;
 
 		// 会话操作相关锁
 		mutable std::mutex session_mutex;
