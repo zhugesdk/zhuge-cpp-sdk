@@ -1,0 +1,10 @@
+zhuge-sdk.opensdf
+zhuge-sdk.sdf
+zhuge-sdk.sln
+zhuge-sdk.v12.suo
+zhuge-sdk.vcxproj
+zhuge-sdk.vcxproj.filters
+Debug
+*.bin
+.vscode
+mac_test
