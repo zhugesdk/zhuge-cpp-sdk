@@ -118,7 +118,7 @@ const std::string& device_id = zhugeio::zhuge_sdk->GetDeviceID();
 std::clog << "The device id: " << device_id <<std::endl;
 ```
 
-### 上传用户属性
+### 上传用户属性
 
 诸葛SDK提供了对用户属性进行追踪的API，该API需要开发者提供一个用户的唯一标识，比如用户注册的唯一账号、邮箱或者手机号。同时也允许记录用户更多的属性信息，从而对用户拥有更多的了解。
 
