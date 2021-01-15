@@ -1,16 +1,25 @@
 ﻿// #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.h"
+#include <cstdio>
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <chrono>
 #include <ctime>
 #include <exception>
+#include <set>
+#include <sstream>
 #include "zhuge_sdk.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #elif __APPLE__
 #include <IOKit/IOKitLib.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#else
+#include <dirent.h>
+#include <sys/stat.h>
 #endif
 
 
@@ -141,6 +150,151 @@ namespace zhugeio
 
 	}
 
+	FileSDKDataStorage::FileSDKDataStorage(ZhugeSDK* sdk) :
+		SDKDataStorage(sdk)
+	{
+
+	}
+
+	void FileSDKDataStorage::Save(std::string& data)
+	{
+		this->buffer.push_back(data);
+	}
+
+	std::list<std::string>& FileSDKDataStorage::Load()
+	{
+		std::set<std::string> files;
+		this->GetFileList(files);  // 获取文件列表
+		if (files.empty()) {
+			if (this->sdk->sdk_config->enable_log) {
+				std::cout << "[ZhugeSDK] There is no data files to load!" << std::endl;
+			}
+		} else {  // 有文件，从最新的文件中读取数据加入到buffer中
+			const std::string fname = *(files.rbegin());
+			if (this->sdk->sdk_config->enable_log) {
+				std::clog << "[ZhugeSDK] Load upload data from " << fname << std::endl;
+			}
+			this->last_read_file = fname;
+			std::ifstream input_file(
+				this->sdk->sdk_config->storage_file_path + fname);
+			if (input_file) {
+				std::string line;
+				while(std::getline(input_file, line)) {
+					if (!line.empty()) {
+						this->buffer.push_back(line);  // 写入缓冲
+					}
+				}
+				input_file.close();
+				if (this->sdk->sdk_config->enable_log) {
+					std::clog 
+						<< "[ZhugeSDK] Load upload data from " 
+						<< fname 
+						<< " finished." 
+						<< std::endl;
+				}
+			} else {
+				if (this->sdk->sdk_config->enable_log) {
+					std::clog 
+						<< "[ZhugeSDK] Read file " 
+						<< fname 
+						<< " error!" 
+						<< std::endl;
+				}
+			}
+		}
+		return this->buffer;
+	}
+
+	void FileSDKDataStorage::Sync()
+	{
+		// 删除刚才加载的文件
+		if (!this->last_read_file.empty()) {
+			if (remove((
+				this->sdk->sdk_config->storage_file_path + 
+				this->last_read_file).c_str())) {
+					if (this->sdk->sdk_config->enable_log) {
+						std::clog 
+							<< "[ZhugeSDK] Error deleting file: " 
+							<< this->last_read_file 
+							<< std::endl;
+					}
+			} else {
+				if (this->sdk->sdk_config->enable_log) {
+						std::clog 
+							<< "[ZhugeSDK] Data file: "
+							<< this->last_read_file
+							<< " deleted!"
+							<< std::endl;
+				}
+			}
+		}
+
+		// 将buffer中剩余的数据写入到新的文件
+		if (!this->buffer.empty()) {
+			using namespace std::chrono;
+			const long long ts = duration_cast<milliseconds>(
+				system_clock::now().time_since_epoch()).count();
+			std::ostringstream ss;
+			ss << sdk->sdk_config->storage_file_path << "zg" << ts;
+			std::string filepath = ss.str();  // 基于时间戳，构建要写入的文件路径
+			std::ofstream output_file(filepath);
+			int count = 0;
+			for (auto itr = buffer.begin(); itr != buffer.end(); itr++) {
+				if (++count > 1000) {  // 超过1000条，写新文件
+					output_file.close();
+					std::this_thread::sleep_for(milliseconds(1));
+					const long long ts = duration_cast<milliseconds>(
+						system_clock::now().time_since_epoch()).count();
+					std::ostringstream ss;
+					ss << sdk->sdk_config->storage_file_path << "zg" << ts;
+					std::string filepath = ss.str();  // 基于时间戳，构建要写入的文件路径
+					output_file = std::ofstream(filepath);
+					count = 0;
+					if (this->sdk->sdk_config->enable_log) {
+						std::clog 
+							<< "[ZhugeSDK] New data file "
+							<< filepath
+							<< " created." 
+							<< std::endl;
+					}
+				}
+				output_file << (*itr) << std::endl;
+			}
+			output_file.close();
+		}
+
+		// 清空buffer所有数据
+		this->buffer.clear();
+		this->last_read_file = "";
+	}
+
+	void FileSDKDataStorage::GetFileList(std::set<std::string> &files)
+	{
+		std::string data_path = this->sdk->sdk_config->storage_file_path;
+	#ifdef _WIN32
+	#else
+		DIR *dir;
+		struct dirent *diread;
+		if ((dir = opendir(data_path.c_str())) != nullptr) {
+			while ((diread = readdir(dir)) != nullptr) {
+				const std::string filename(diread->d_name);
+				if (filename.rfind("zg", 0) == 0) {
+					files.insert(filename);
+				}
+			}
+			closedir(dir);
+		} else {  // 读取失败
+			if (this->sdk->sdk_config->enable_log) {
+				std::clog 
+					<< "Open data path " 
+					<< data_path 
+					<< " error!" 
+					<< std::endl;
+			}
+		}
+	#endif
+	}
+
 	ZhugeSDKTaskProcess::ZhugeSDKTaskProcess(ZhugeSDK* sdk) :
 		zhuge_sdk(sdk),
 		upload_data_queue()
@@ -150,7 +304,7 @@ namespace zhugeio
 			this->data_storage = new MemorySDKDataStorage(sdk);
 		}
 		else {
-			this->data_storage = nullptr;  // TODO 添加文件存储实现
+			this->data_storage = new FileSDKDataStorage(sdk);  // TODO 添加文件存储实现
 		}
 	}
 
@@ -846,6 +1000,16 @@ namespace zhugeio
 	ZhugeSDKConfig& ZhugeSDKConfig::StorageFilePath(const std::string storage_file_path)
 	{
 		this->storage_file_path = storage_file_path;
+		if (!storage_file_path.empty()) {  // 非空字符串
+			#ifdef _WIN32
+			#else
+			if (storage_file_path.at(storage_file_path.size() - 1) != '/') {
+				this->storage_file_path += "/";
+			}
+			const std::string cmd = "mkdir -p " + this->storage_file_path;
+			system(cmd.c_str());  // ensure the data dir existed
+			#endif
+		}
 		return *this;
 	}
 

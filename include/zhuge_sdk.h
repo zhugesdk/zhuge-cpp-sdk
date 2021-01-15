@@ -5,6 +5,7 @@
 #include <atomic>
 #include <queue>
 #include <list>
+#include <set>
 #include <future>
 #include <mutex>
 #include <random>
@@ -358,6 +359,20 @@ namespace zhugeio
 		void ResizeBuffer();
 	public:
 		MemorySDKDataStorage(ZhugeSDK* sdk);
+		virtual void Save(std::string& data);
+		virtual std::list<std::string>& Load();
+		virtual void Sync();
+	};
+
+	// 基于文件的SDK上传数据存储
+	class FileSDKDataStorage : public SDKDataStorage
+	{
+	private:
+		std::list<std::string> buffer;
+		std::string last_read_file;
+		void GetFileList(std::set<std::string> &files);
+	public:
+		FileSDKDataStorage(ZhugeSDK* sdk);
 		virtual void Save(std::string& data);
 		virtual std::list<std::string>& Load();
 		virtual void Sync();

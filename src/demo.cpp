@@ -1,14 +1,12 @@
 ﻿#include <iostream>
-#include <thread>
 #include "zhuge_sdk.h"
-
 
 
 int main()
 {
 	const std::string api_host = "54.222.139.120";
 	const int api_port = 8081;
-	const std::string app_key = "080163d942594de09e5fcb61d4d22544";
+	const std::string app_key = "4db4847df4494d2cb4866d10e4b405eb";
 
 	// 初始化SDK配置
 	zhugeio::ZhugeSDKConfig zhuge_sdk_config(api_host, api_port, app_key);
@@ -24,7 +22,8 @@ int main()
 		.APIConnectionTimeout(10)
 		.APIReadTimeout(5)
 		.APIWriteTimeout(10)
-		.MaxStorageRecords(1000);
+		.MaxStorageRecords(1000)
+		.StorageFilePath("/Users/chihongze/projects/sdk_data");
 
 	zhugeio::init_zhuge_sdk(zhuge_sdk_config);
 
@@ -57,7 +56,7 @@ int main()
 	zhugeio::zhuge_sdk->SetCommonEventCustomProperties(common_properties);
 
 	// 事件属性上传
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 1000; i++) {
 		zhugeio::ZhugeEvent* event = new zhugeio::ZhugeEvent(zhugeio::GBK_TO_UTF8("Add_cart"));
 		event->AddCustomProperty(zhugeio::GBK_TO_UTF8("Shopping_num"), i);
 		event->AddCustomProperty("common_property_3", "4.0");
@@ -75,7 +74,6 @@ int main()
 
 	// 关闭SDK
 	zhugeio::shutdown_zhuge_sdk();
-
 	std::cin.get();
 
 	return 0;
