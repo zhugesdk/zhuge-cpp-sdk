@@ -6,5 +6,6 @@ zhuge-sdk.vcxproj
 zhuge-sdk.vcxproj.filters
 Debug
 *.bin
+*.out
 .vscode
 mac_test

@@ -297,3 +297,32 @@ SDK均采用异步上传的方式，当通过诸如Identify、Track、Platform�
 而为了避免上传队列中的数据无限占用太多内存资源，会对队列中上传数据的条数做出限制，默认最多保留1000条，当超过此限制，会自动丢弃1/4的旧数据。通过`MaxStorageRecords` 初始化选项可以改变保留的最大数据条数。
 
 需要注意：这里的数据条数并不等同于事件数，SDK会将多个事件打包成一条记录进行网络传送，这里的数据条数是指这种已经打包的网络传送记录数目。因此，1000条上传记录所包含的事件数通常要大于1000个事件，其所包含的数据量在1000个事件到1000 * `MaxSendSize`之间。
+
+### 上传数据持久化
+
+默认情况下，因为网络中断等原因上传失败的数据，都是保存在内存当中的，这对于应付网络暂时的不稳定是足够的，但如果是较长时间的网络中断，就会造成大量的上传数据丢失。如果您的应用是需要经常工作在较长时间网络中断的环境下，那么可以通过设置上传数据持久化的方式来保存这些上传失败的数据，等到网络正常的时候，SDK会自动上传这些失败的数据。
+
+我们只需要在配置SDK的时候，设置一个数据保存目录，就可以开启上传数据持久化：
+
+```c++
+	zhugeio::ZhugeSDKConfig zhuge_sdk_config(api_host, api_port, app_key);
+	zhuge_sdk_config
+		.APIPath("/apipool")
+		.Platform(zhugeio::ZHUGE_PLATFORM_JS)
+		.ProcessIntervalMilliseconds(3000)
+		.MaxSendSize(10)
+		.EnableLog(false)
+		.EnableDebug(false)
+		.TimeZone(28800000)
+		.UserDeviceID("")
+		.APIConnectionTimeout(10)
+		.APIReadTimeout(5)
+		.APIWriteTimeout(10)
+    .MaxStorageRecords(1000)  // MaxStorageRecords在此的含义变为一个段，即一个文件保存的上传失败记录条数。如果这个数字太大，会造成每次请求重试的记录过多，如果太小，会造成文件数目过多。默认为1000条。
+		.StorageFilePath("C:\\sdk_test\\mydata");  // 数据保存目录
+```
+
+如果指定的数据保存目录不存在，SDK会自动创建这个目录。
+
+当数据上传失败的时候，SDK会将上传失败的数据按照`MaxStorageRecords`指定的条数分段保存到这个目录中。并且每次执行消费循环的时候，SDK会自动选择一个最新上传失败的段去进行重试，当数据上传成功，则会将磁盘中相应的文件删除，直到所有失败记录都重试完，整个数据目录就会清空，开发者无需自己清理磁盘空间。
+
